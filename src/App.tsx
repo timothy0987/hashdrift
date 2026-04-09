@@ -1,5 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Wallet, ChevronLeft, ChevronRight, Activity, Terminal, ShieldAlert, Sparkles, Hash, X, ExternalLink, Droplet } from 'lucide-react';
+import { HashConnect, HashConnectTypes } from 'hashconnect';
+
+let hashconnect: any = null;
+
+const appMetadata: HashConnectTypes.AppMetadata = {
+    name: "HashDrift",
+    description: "Web3 Prediction Game",
+    icon: "https://hashdrift.vercel.app/favicon.ico"
+};
 
 type GameState = 'landing' | 'playing' | 'gameover';
 
@@ -43,6 +52,8 @@ function getMood(round: number) {
 
 function formatAddress(addr: string) {
   if (!addr) return '';
+  if (addr.includes('.') && addr.length < 12) return addr;
+  if (addr.length <= 10) return addr;
   return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
 }
 
@@ -86,18 +97,42 @@ export default function App() {
     let targetProvider: any = null;
     const eth = (window as any).ethereum;
 
-    // Isolate specific wallet providers to avoid auto-connecting to MetaMask
+    // Use native HashConnect specifically if HashPack is selected
+    if (walletName === 'HashPack') {
+      try {
+        if (!hashconnect) {
+          hashconnect = new HashConnect(true); // debug mode off typically but parameter takes bool
+          hashconnect = new HashConnect();
+          await hashconnect.init(appMetadata, "testnet", false);
+          
+          hashconnect.pairingEvent.on((pairingData: any) => {
+            if (pairingData.accountIds && pairingData.accountIds.length > 0) {
+              const accountId = pairingData.accountIds[0];
+              setWalletConnected(true);
+              setConnectedAddress(accountId);
+              setShowModal(false);
+              addLog(`Connected via HashPack: ${accountId}`, "success");
+            }
+          });
+        }
+        await hashconnect.connectToLocalWallet();
+        addLog("Invoked HashConnect pairing...", "system");
+        
+        // Timeout to close modal in case popup is hidden
+        setTimeout(() => setShowModal(false), 2000);
+      } catch (err: any) {
+        addLog(`HashConnect Error: ${err.message}`, "error");
+        alert("HashPack native extension could not be triggered. Ensure it is installed and enabled.");
+      }
+      return;
+    }
+
+    // Isolate EVM specific wallet providers for MetaMask and Blade
     if (walletName === 'MetaMask') {
       if (eth?.providers) {
         targetProvider = eth.providers.find((p: any) => p.isMetaMask) || eth;
       } else {
         targetProvider = eth;
-      }
-    } else if (walletName === 'HashPack') {
-      if ((window as any).hashpack?.ethereum) {
-        targetProvider = (window as any).hashpack.ethereum; // HashPack EVM provider
-      } else if (eth?.providers) {
-        targetProvider = eth.providers.find((p: any) => p.isHashPack) || null;
       }
     } else if (walletName === 'Blade Wallet') {
       if ((window as any).bladeConnect) {
