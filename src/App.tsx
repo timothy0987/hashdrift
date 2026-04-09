@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Wallet, ChevronLeft, ChevronRight, Activity, Terminal, ShieldAlert, Sparkles, Hash } from 'lucide-react';
+import { Wallet, ChevronLeft, ChevronRight, Activity, Terminal, ShieldAlert, Sparkles, Hash, X, ExternalLink, Droplet } from 'lucide-react';
 
 type GameState = 'landing' | 'playing' | 'gameover';
 
@@ -44,6 +44,7 @@ function getMood(round: number) {
 export default function App() {
   const [gameState, setGameState] = useState<GameState>('landing');
   const [walletConnected, setWalletConnected] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [score, setScore] = useState(0);
   const [round, setRound] = useState(1);
   const [scenario, setScenario] = useState<Scenario>(SCENARIOS[0]);
@@ -71,8 +72,13 @@ export default function App() {
       addLog("Wallet connection closed.", "system");
       return;
     }
+    setShowModal(true);
+  };
+
+  const handleWalletSelect = (walletName: string) => {
+    setShowModal(false);
     setWalletConnected(true);
-    addLog("Wallet connected: 0x7a...4eF1", "success");
+    addLog(`Wallet connected via ${walletName}: 0x7a...4eF1`, "success");
     addLog("Hedera SDK Initialized (Mocked)", "system");
   };
 
@@ -148,10 +154,17 @@ export default function App() {
             <Hash className="text-neon-blue" size={28} />
             HashDrift
           </div>
-          <button className="wallet-btn" onClick={connectWallet}>
-            <Wallet size={18} />
-            {walletConnected ? '0x7a...4eF1' : 'Connect Wallet'}
-          </button>
+          <div className="header-actions">
+            <a href="https://portal.hedera.com/" target="_blank" rel="noreferrer" className="faucet-link">
+              <Droplet size={16} />
+              Get Testnet HBAR
+              <ExternalLink size={14} />
+            </a>
+            <button className="wallet-btn" onClick={connectWallet}>
+              <Wallet size={18} />
+              {walletConnected ? '0x7a...4eF1' : 'Connect Wallet'}
+            </button>
+          </div>
         </header>
 
         <main>
@@ -269,6 +282,32 @@ export default function App() {
             ))}
           </div>
         </div>
+        
+        {showModal && (
+          <div className="modal-overlay" onClick={() => setShowModal(false)}>
+            <div className="modal-content glass-panel" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>Connect a Wallet</h3>
+                <button className="modal-close" onClick={() => setShowModal(false)}>
+                  <X size={20} />
+                </button>
+              </div>
+              <p className="text-muted text-sm mb-4">Select a wallet to continue your session on the Hedera network.</p>
+              
+              <div className="wallet-options">
+                <button className="wallet-option" onClick={() => handleWalletSelect('HashPack')}>
+                  HashPack Wallet
+                </button>
+                <button className="wallet-option" onClick={() => handleWalletSelect('Blade Wallet')}>
+                  Blade Wallet
+                </button>
+                <button className="wallet-option" onClick={() => handleWalletSelect('MetaMask')}>
+                  MetaMask
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

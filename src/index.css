@@ -499,5 +499,120 @@ main {
 .mb-2 { margin-bottom: 0.5rem; }
 .mb-4 { margin-bottom: 1rem; }
 .opacity-80 { opacity: 0.8; }
-.text-sm { font-size: 0.875rem; }
-.text-xs { font-size: 0.75rem; }
+  .text-xs { font-size: 0.75rem; }
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  animation: fade-in 0.2s ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-content {
+  width: 90%;
+  max-width: 400px;
+  padding: 1.5rem;
+  position: relative;
+  margin: 0;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.modal-header h3 {
+  font-size: 1.25rem;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 50%;
+  display: flex;
+  transition: all 0.2s;
+}
+
+.modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.wallet-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.wallet-option {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-light);
+  color: white;
+  padding: 1rem;
+  border-radius: 12px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.wallet-option:hover {
+  background: rgba(0, 209, 255, 0.1);
+  border-color: var(--neon-blue);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 209, 255, 0.2);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.faucet-link {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--neon-purple);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.5rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(168, 85, 247, 0.1);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  transition: all 0.2s;
+}
+
+.faucet-link:hover {
+  background: rgba(168, 85, 247, 0.2);
+  border-color: var(--neon-purple);
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.3);
+}
+
+@media (max-width: 768px) {
+  .header-actions {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.5rem;
+  }
+}
