@@ -41,10 +41,15 @@ function getMood(round: number) {
   return { label: 'Chaotic', class: 'mood-chaotic' };
 }
 
+function formatAddress(addr: string) {
+  if (!addr) return '';
+  return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
+}
+
 export default function App() {
   const [gameState, setGameState] = useState<GameState>('landing');
   const [walletConnected, setWalletConnected] = useState(false);
-  const [connectedWalletName, setConnectedWalletName] = useState<string | null>(null);
+  const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [score, setScore] = useState(0);
   const [round, setRound] = useState(1);
@@ -70,19 +75,35 @@ export default function App() {
   const connectWallet = () => {
     if (walletConnected) {
       setWalletConnected(false);
-      setConnectedWalletName(null);
+      setConnectedAddress(null);
       addLog("Wallet connection closed.", "system");
       return;
     }
     setShowModal(true);
   };
 
-  const handleWalletSelect = (walletName: string) => {
-    setShowModal(false);
-    setWalletConnected(true);
-    setConnectedWalletName(walletName);
-    addLog(`Wallet connected via ${walletName}: 0x7a...4eF1`, "success");
-    addLog("Hedera SDK Initialized (Mocked)", "system");
+  const handleWalletSelect = async (walletName: string) => {
+    const eth = (window as any).ethereum;
+    if (!eth) {
+      alert(`${walletName} (or compatible Web3 provider) not detected in browser!`);
+      return;
+    }
+    try {
+      const accounts = await eth.request({ method: 'eth_requestAccounts' });
+      if (accounts && accounts.length > 0) {
+        const address = accounts[0];
+        setWalletConnected(true);
+        setConnectedAddress(address);
+        setShowModal(false);
+        addLog(`Connected via ${walletName}: ${formatAddress(address)}`, "success");
+      }
+    } catch (error: any) {
+      if (error.code === 4001) {
+        addLog(`Connection rejected by user in ${walletName}`, "error");
+      } else {
+        addLog(`Failed to connect ${walletName}: ${error.message}`, "error");
+      }
+    }
   };
 
   const startGame = () => {
@@ -165,7 +186,7 @@ export default function App() {
             </a>
             <button className="wallet-btn" onClick={connectWallet}>
               <Wallet size={18} />
-              {walletConnected ? `${connectedWalletName} Active` : 'Connect Wallet'}
+              {walletConnected && connectedAddress ? formatAddress(connectedAddress) : 'Connect Wallet'}
             </button>
           </div>
         </header>
