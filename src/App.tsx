@@ -44,6 +44,7 @@ function getMood(round: number) {
 export default function App() {
   const [gameState, setGameState] = useState<GameState>('landing');
   const [walletConnected, setWalletConnected] = useState(false);
+  const [connectedWalletName, setConnectedWalletName] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [score, setScore] = useState(0);
   const [round, setRound] = useState(1);
@@ -69,6 +70,7 @@ export default function App() {
   const connectWallet = () => {
     if (walletConnected) {
       setWalletConnected(false);
+      setConnectedWalletName(null);
       addLog("Wallet connection closed.", "system");
       return;
     }
@@ -78,6 +80,7 @@ export default function App() {
   const handleWalletSelect = (walletName: string) => {
     setShowModal(false);
     setWalletConnected(true);
+    setConnectedWalletName(walletName);
     addLog(`Wallet connected via ${walletName}: 0x7a...4eF1`, "success");
     addLog("Hedera SDK Initialized (Mocked)", "system");
   };
@@ -162,7 +165,7 @@ export default function App() {
             </a>
             <button className="wallet-btn" onClick={connectWallet}>
               <Wallet size={18} />
-              {walletConnected ? '0x7a...4eF1' : 'Connect Wallet'}
+              {walletConnected ? `${connectedWalletName} Active` : 'Connect Wallet'}
             </button>
           </div>
         </header>
