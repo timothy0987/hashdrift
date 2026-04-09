@@ -83,13 +83,42 @@ export default function App() {
   };
 
   const handleWalletSelect = async (walletName: string) => {
+    let targetProvider: any = null;
     const eth = (window as any).ethereum;
-    if (!eth) {
-      alert(`${walletName} (or compatible Web3 provider) not detected in browser!`);
+
+    // Isolate specific wallet providers to avoid auto-connecting to MetaMask
+    if (walletName === 'MetaMask') {
+      if (eth?.providers) {
+        targetProvider = eth.providers.find((p: any) => p.isMetaMask) || eth;
+      } else {
+        targetProvider = eth;
+      }
+    } else if (walletName === 'HashPack') {
+      if ((window as any).hashpack?.ethereum) {
+        targetProvider = (window as any).hashpack.ethereum; // HashPack EVM provider
+      } else if (eth?.providers) {
+        targetProvider = eth.providers.find((p: any) => p.isHashPack) || null;
+      }
+    } else if (walletName === 'Blade Wallet') {
+      if ((window as any).bladeConnect) {
+        targetProvider = (window as any).bladeConnect; // Blade proprietary/EVM object
+      } else if (eth?.providers) {
+        targetProvider = eth.providers.find((p: any) => p.isBlade) || null;
+      }
+    }
+
+    if (!targetProvider) {
+      alert(`Could not detect ${walletName} EVM extension in browser. Ensure it is installed and enabled.`);
       return;
     }
+
+    if (typeof targetProvider.request !== 'function') {
+      alert(`${walletName} detected, but standard EVM request method is missing. HashConnect or deep integration required.`);
+      return;
+    }
+
     try {
-      const accounts = await eth.request({ method: 'eth_requestAccounts' });
+      const accounts = await targetProvider.request({ method: 'eth_requestAccounts' });
       if (accounts && accounts.length > 0) {
         const address = accounts[0];
         setWalletConnected(true);
