@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Wallet, ChevronLeft, ChevronRight, Activity, Terminal, ShieldAlert, Sparkles, Hash, X, ExternalLink, Droplet } from 'lucide-react';
 import { HashConnect, HashConnectTypes } from 'hashconnect';
 
@@ -106,8 +106,8 @@ export default function App() {
     setConnectedAddress(null);
     setWalletBalance(null);
     if (hashconnect) {
-      try { await hashconnect.disconnect(hashconnect.hcData?.topic); } catch (e) { }
-      try { hashconnect.clearConnectionsAndData(); } catch (e) { }
+      try { await hashconnect.disconnect(hashconnect.hcData?.topic); } catch { }
+      try { hashconnect.clearConnectionsAndData(); } catch { }
       hashconnect = null;
     }
     addLog("Wallet connection closed.", "system");
@@ -129,7 +129,7 @@ export default function App() {
       }
 
       // Ensure fresh state for a new connection attempt
-      try { hashconnect.clearConnectionsAndData(); } catch (e) {}
+      try { hashconnect.clearConnectionsAndData(); } catch {}
 
       // Pair event handles successful connections
       hashconnect.pairingEvent.once(async (pairingData: any) => {
@@ -158,7 +158,7 @@ export default function App() {
       }, 3500);
 
       // Important: Bind the foundExtension event BEFORE calling init()!
-      hashconnect.foundExtensionEvent.once((walletMetadata: any) => {
+      hashconnect.foundExtensionEvent.once((_walletMetadata: any) => {
         clearTimeout(detectTimeout);
         addLog("HashPack extension detected, connecting...", "system");
         hashconnect.connectToLocalWallet();
@@ -179,9 +179,10 @@ export default function App() {
     // 1. Try EIP-6963 (Modern Multi-Wallet Provider Discovery)
     // This perfectly bypasses situations where one wallet hijacked window.ethereum
     const eip6963Providers: any[] = [];
-    const onAnnounce = (e: any) => {
-      if (e.detail?.provider) {
-        eip6963Providers.push(e.detail);
+    const onAnnounce = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.provider) {
+        eip6963Providers.push(customEvent.detail);
       }
     };
     window.addEventListener("eip6963:announceProvider", onAnnounce);
