@@ -22,13 +22,19 @@ interface WalletState {
 }
 
 const STORAGE_KEY = 'oracleDrift_wallet_session';
-let hcInstance: any = null;
+let hcInstance: HashConnect | null = null;
 
 const appMetadata: HashConnectTypes.AppMetadata = {
   name: "Oracle Drift",
   description: "Web3 Prediction Game",
   icon: "https://hashdrift.vercel.app/favicon.ico"
 };
+
+// Types for EIP-6963
+interface EIP6963ProviderDetail {
+  info: { name: string; icon: string; uuid: string; rdns: string };
+  provider: unknown;
+}
 
 export function useWallet() {
   const [state, setState] = useState<WalletState>({
@@ -44,11 +50,11 @@ export function useWallet() {
     const session = localStorage.getItem(STORAGE_KEY);
     if (session) {
       try {
-        const parsed = JSON.parse(session);
+        const parsed = JSON.parse(session) as { type: string; address: string };
         if (parsed.type === 'metamask') {
-          connectMetaMask(true);
+          void connectMetaMask(true);
         } else if (parsed.type === 'hashpack') {
-          connectHashPack(true); // Attempt silent reconnect
+          void connectHashPack(true); // Attempt silent reconnect
         }
       } catch {
         localStorage.removeItem(STORAGE_KEY);
@@ -60,17 +66,47 @@ export function useWallet() {
     setState(prev => ({ ...prev, ...updates }));
   };
 
-  const getEVMProvider = () => {
+  const getEVMProvider = (): unknown => {
     if (typeof window === 'undefined') return null;
 
-    // Favor EIP-6963 if we had previously implemented discovery, or fallback to pure window.ethereum
-    const eth = (window as any).ethereum;
-    if (!eth) return null;
+    let targetProvider: unknown = null;
 
-    // Find pure metamask if hijacked
-    const isPureMetaMask = (p: any) => p?.isMetaMask && !p?.isHashPack && !p?.isBlade;
-    const provider = eth.providers?.find(isPureMetaMask) || (isPureMetaMask(eth) ? eth : eth);
-    return provider;
+    const eip6963Providers: EIP6963ProviderDetail[] = [];
+    const onAnnounce = (event: Event) => {
+      const customEvent = event as CustomEvent<EIP6963ProviderDetail>;
+      if (customEvent.detail?.provider) {
+        eip6963Providers.push(customEvent.detail);
+      }
+    };
+    
+    window.addEventListener("eip6963:announceProvider", onAnnounce);
+    window.dispatchEvent(new Event("eip6963:requestProvider"));
+    window.removeEventListener("eip6963:announceProvider", onAnnounce);
+
+    const mmEip = eip6963Providers.find(p => p.info?.name === 'MetaMask');
+    if (mmEip) {
+      targetProvider = mmEip.provider;
+    }
+
+    if (!targetProvider) {
+      const eth = (window as Record<string, unknown>).ethereum as Record<string, unknown> | undefined;
+      if (!eth) return null;
+
+      const isPureMetaMask = (p: unknown) => {
+         if (!p || typeof p !== 'object') return false;
+         const obj = p as Record<string, unknown>;
+         return Boolean(obj.isMetaMask && !obj.isHashPack && !obj.isBlade);
+      };
+
+      const providers = eth.providers as unknown[];
+      if (Array.isArray(providers)) {
+        targetProvider = providers.find(isPureMetaMask) || (isPureMetaMask(eth) ? eth : eth);
+      } else {
+        targetProvider = isPureMetaMask(eth) ? eth : eth;
+      }
+    }
+
+    return targetProvider;
   };
 
   const connectMetaMask = async (silent = false) => {
@@ -83,8 +119,9 @@ export function useWallet() {
         return;
       }
 
-      const provider = new BrowserProvider(rawProvider);
-      const accounts = await provider.send("eth_requestAccounts", []);
+      // Using import('ethers').Eip1193Provider to cast rawProvider is safe for BrowserProvider
+      const provider = new BrowserProvider(rawProvider as import('ethers').Eip1193Provider);
+      const accounts = await provider.send("eth_requestAccounts", []) as string[];
       
       if (!accounts || accounts.length === 0) throw new Error("No accounts found.");
       
@@ -97,8 +134,9 @@ export function useWallet() {
       if (Number(chainId) !== 296) { // 296 is Hedera Testnet
         try {
           await provider.send("wallet_switchEthereumChain", [{ chainId: HEDERA_TESTNET_CONFIG.chainId }]);
-        } catch (switchError: any) {
-          if (switchError.code === 4902) {
+        } catch (switchError: unknown) {
+          const sError = switchError as { code?: number };
+          if (sError.code === 4902) {
             await provider.send("wallet_addEthereumChain", [HEDERA_TESTNET_CONFIG]);
           } else {
             console.warn("User rejected network switch or another error occurred.");
@@ -116,13 +154,14 @@ export function useWallet() {
 
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ type: 'metamask', address: account }));
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("MetaMask connect error:", err);
       if (!silent) {
-        if (err.code === 4001) {
+        const errorObj = err as { code?: number; message?: string };
+        if (errorObj.code === 4001) {
           updateState({ error: "Connection request rejected by user." });
         } else {
-          updateState({ error: err.message || "Failed to connect MetaMask." });
+          updateState({ error: errorObj.message || "Failed to connect MetaMask." });
         }
       }
     }
@@ -138,13 +177,14 @@ export function useWallet() {
         try { hcInstance.clearConnectionsAndData(); } catch {}
       }
 
-      hcInstance.pairingEvent.once(async (pairingData: any) => {
-        if (pairingData.accountIds && pairingData.accountIds.length > 0) {
-          const accountId = pairingData.accountIds[0];
+      hcInstance.pairingEvent.once(async (pairingData: unknown) => {
+        const pd = pairingData as { accountIds?: string[] };
+        if (pd.accountIds && pd.accountIds.length > 0) {
+          const accountId = pd.accountIds[0];
           let balance = "0.0000";
           try {
             const res = await fetch(`https://testnet.mirrornode.hedera.com/api/v1/balances?account.id=${accountId}`);
-            const data = await res.json();
+            const data = (await res.json()) as { balances?: Array<{ balance: number }> };
             if (data.balances?.[0]) balance = (data.balances[0].balance / 1e8).toFixed(4);
           } catch (e) {
             console.error("Failed to fetch balance", e);
@@ -166,14 +206,16 @@ export function useWallet() {
         if (!silent) updateState({ error: "HashPack extension not detected." });
       }, 3500);
 
-      hcInstance.foundExtensionEvent.once((_walletMetadata: any) => {
+      hcInstance.foundExtensionEvent.once((_walletMetadata: unknown) => {
         clearTimeout(detectTimeout);
-        hcInstance.connectToLocalWallet();
+        if (hcInstance) {
+          hcInstance.connectToLocalWallet();
+        }
       });
 
       await hcInstance.init(appMetadata, "testnet", false);
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("HashPack connect error:", err);
       if (!silent) updateState({ error: "Failed to connect HashPack." });
     }
@@ -182,7 +224,7 @@ export function useWallet() {
   const disconnectWallet = async () => {
     try {
       if (state.walletType === 'hashpack' && hcInstance) {
-        try { await hcInstance.disconnect(hcInstance.hcData?.topic); } catch {}
+        try { await hcInstance.disconnect(hcInstance.hcData?.topic ?? ""); } catch {}
         try { hcInstance.clearConnectionsAndData(); } catch {}
         hcInstance = null;
       }

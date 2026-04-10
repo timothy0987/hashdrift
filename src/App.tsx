@@ -72,7 +72,6 @@ export default function App() {
     isConnected: walletConnected,
     walletAddress: connectedAddress,
     balance: walletBalance,
-    walletType,
     error: walletError,
     connectMetaMask,
     connectHashPack,
@@ -379,9 +378,6 @@ export default function App() {
               <div className="wallet-options">
                 <button className="wallet-option" onClick={() => handleWalletSelect('HashPack')}>
                   HashPack Wallet
-                </button>
-                <button className="wallet-option" onClick={() => handleWalletSelect('Blade Wallet')}>
-                  Blade Wallet
                 </button>
                 <button className="wallet-option" onClick={() => handleWalletSelect('MetaMask')}>
                   MetaMask
