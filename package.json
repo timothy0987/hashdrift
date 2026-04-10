@@ -13,7 +13,8 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "hashconnect": "^2.2.14",
-    "@hashgraph/sdk": "^2.49.0"
+    "@hashgraph/sdk": "^2.49.0",
+    "ethers": "^6.11.1"
   },
   "devDependencies": {
     "@types/react": "^18.2.66",

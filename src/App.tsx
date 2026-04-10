@@ -1,14 +1,6 @@
 import { useState } from 'react';
 import { Wallet, ChevronLeft, ChevronRight, Activity, Terminal, ShieldAlert, Sparkles, Hash, X, ExternalLink, Droplet } from 'lucide-react';
-import { HashConnect, HashConnectTypes } from 'hashconnect';
-
-let hashconnect: any = null;
-
-const appMetadata: HashConnectTypes.AppMetadata = {
-  name: "HashDrift",
-  description: "Web3 Prediction Game",
-  icon: "https://hashdrift.vercel.app/favicon.ico"
-};
+import { useWallet } from './hooks/useWallet';
 
 type GameState = 'landing' | 'playing' | 'gameover';
 
@@ -76,9 +68,18 @@ function formatAddress(addr: string) {
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState>('landing');
-  const [walletConnected, setWalletConnected] = useState(false);
-  const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
-  const [walletBalance, setWalletBalance] = useState<string | null>(null);
+  const {
+    isConnected: walletConnected,
+    walletAddress: connectedAddress,
+    balance: walletBalance,
+    walletType,
+    error: walletError,
+    connectMetaMask,
+    connectHashPack,
+    disconnectWallet,
+    clearError
+  } = useWallet();
+
   const [showModal, setShowModal] = useState(false);
   const [score, setScore] = useState(0);
   const [round, setRound] = useState(1);
@@ -101,163 +102,26 @@ export default function App() {
     setLogs(prev => [entry, ...prev]);
   };
 
-  const disconnectWallet = async () => {
-    setWalletConnected(false);
-    setConnectedAddress(null);
-    setWalletBalance(null);
-    if (hashconnect) {
-      try { await hashconnect.disconnect(hashconnect.hcData?.topic); } catch { }
-      try { hashconnect.clearConnectionsAndData(); } catch { }
-      hashconnect = null;
-    }
-    addLog("Wallet connection closed.", "system");
-  };
-
   const connectWallet = () => {
     if (walletConnected) {
       disconnectWallet();
+      addLog("Wallet connection closed.", "system");
       return;
     }
+    clearError();
     setShowModal(true);
-  };
-
-  const connectHashPack = async () => {
-    try {
-      addLog("Initializing HashConnect...", "system");
-      if (!hashconnect) {
-        hashconnect = new HashConnect();
-      }
-
-      // Ensure fresh state for a new connection attempt
-      try { hashconnect.clearConnectionsAndData(); } catch {}
-
-      // Pair event handles successful connections
-      hashconnect.pairingEvent.once(async (pairingData: any) => {
-        if (pairingData.accountIds && pairingData.accountIds.length > 0) {
-          const accountId = pairingData.accountIds[0];
-          setWalletConnected(true);
-          setConnectedAddress(accountId);
-          addLog(`Connected via HashPack: ${accountId}`, "success");
-          try {
-            const res = await fetch(`https://testnet.mirrornode.hedera.com/api/v1/balances?account.id=${accountId}`);
-            const data = await res.json();
-            if (data.balances?.[0]) {
-              const balance = (data.balances[0].balance / 1e8).toFixed(4);
-              setWalletBalance(balance);
-            }
-          } catch (e) {
-            console.error("Failed to fetch balance", e);
-          }
-        }
-      });
-
-      // Timeout to warn if extension is missing
-      const detectTimeout = setTimeout(() => {
-        addLog("HashPack extension not found.", "error");
-        alert("HashPack extension could not be detected. Make sure it is installed and enabled in your browser.");
-      }, 3500);
-
-      // Important: Bind the foundExtension event BEFORE calling init()!
-      hashconnect.foundExtensionEvent.once((_walletMetadata: any) => {
-        clearTimeout(detectTimeout);
-        addLog("HashPack extension detected, connecting...", "system");
-        hashconnect.connectToLocalWallet();
-      });
-
-      // Init and wait for the extension event to fire
-      await hashconnect.init(appMetadata, "testnet", false);
-
-    } catch (err: any) {
-      addLog(`HashConnect Error: ${err.message}`, "error");
-      alert("Could not connect to HashPack. Ensure the extension is installed and enabled.");
-    }
-  };
-
-  const connectEVMWallet = async (walletName: string) => {
-    let targetProvider: any = null;
-
-    // 1. Try EIP-6963 (Modern Multi-Wallet Provider Discovery)
-    // This perfectly bypasses situations where one wallet hijacked window.ethereum
-    const eip6963Providers: any[] = [];
-    const onAnnounce = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      if (customEvent.detail?.provider) {
-        eip6963Providers.push(customEvent.detail);
-      }
-    };
-    window.addEventListener("eip6963:announceProvider", onAnnounce);
-    window.dispatchEvent(new Event("eip6963:requestProvider"));
-    window.removeEventListener("eip6963:announceProvider", onAnnounce);
-
-    if (walletName === 'MetaMask') {
-      const mmEip = eip6963Providers.find(p => p.info?.name === 'MetaMask');
-      if (mmEip) {
-        targetProvider = mmEip.provider;
-        addLog("Detected pure MetaMask via EIP-6963.", "system");
-      }
-    }
-
-    // 2. Fallback to Legacy window.ethereum Logic if EIP-6963 missed it
-    if (!targetProvider) {
-      const eth = (window as any).ethereum;
-
-      if (!eth && walletName !== 'Blade Wallet') {
-        alert(`No extension found. Please install ${walletName}.`);
-        return;
-      }
-
-      if (walletName === 'MetaMask') {
-        // Strictly avoid HashPack and other spoofers when asking for MetaMask
-        const isPureMetaMask = (p: any) => p?.isMetaMask && !p?.isHashPack && !p?.isBlade && !p?.isBraveWallet && !p?.isRabby;
-        targetProvider = eth?.providers?.find(isPureMetaMask) || (isPureMetaMask(eth) ? eth : null);
-      } else if (walletName === 'Blade Wallet') {
-        targetProvider = (window as any).bladeConnect || eth?.providers?.find((p: any) => p?.isBlade) || (eth?.isBlade ? eth : null);
-      }
-      
-      // Default fallback if logic is missed but an EVM wallet exists
-      if (!targetProvider) targetProvider = eth;
-    }
-
-    if (!targetProvider || typeof targetProvider.request !== 'function') {
-      alert(`${walletName} provider could not be found. If HashPack is hijacking the connection, please disable "Inject as Default EVM Wallet" in its settings.`);
-      return;
-    }
-
-    try {
-      addLog(`Connecting to ${walletName}...`, "system");
-      const accounts = await targetProvider.request({ method: 'eth_requestAccounts' });
-      if (accounts && accounts.length > 0) {
-        const address = accounts[0];
-        setWalletConnected(true);
-        setConnectedAddress(address);
-        addLog(`Connected via ${walletName}: ${formatAddress(address)}`, "success");
-
-        try {
-          const balanceHex = await targetProvider.request({
-            method: 'eth_getBalance',
-            params: [address, 'latest']
-          });
-          const balance = (parseInt(balanceHex, 16) / 1e18).toFixed(4);
-          setWalletBalance(balance);
-        } catch (e) {
-          console.error("Failed to fetch balance", e);
-        }
-      }
-    } catch (error: any) {
-      if (error.code === 4001) {
-        addLog(`${walletName} connection rejected.`, "error");
-      } else {
-        addLog(`Error connecting ${walletName}: ${error.message}`, "error");
-      }
-    }
   };
 
   const handleWalletSelect = async (walletName: string) => {
     setShowModal(false);
     if (walletName === 'HashPack') {
+      addLog("Connecting via HashPack...", "system");
       await connectHashPack();
+      addLog("HashPack connection processing completed.", "info");
     } else {
-      await connectEVMWallet(walletName);
+      addLog(`Connecting via ${walletName} / MetaMask...`, "system");
+      await connectMetaMask();
+      addLog("EVM connection processing completed.", "info");
     }
   };
 
@@ -351,6 +215,14 @@ export default function App() {
             </button>
           </div>
         </header>
+
+        {walletError && (
+          <div style={{ position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(239, 68, 68, 0.9)', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '8px', zIndex: 1000, display: 'flex', alignItems: 'center', gap: '0.5rem', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)' }}>
+            <ShieldAlert size={18} />
+            {walletError}
+            <button onClick={clearError} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', marginLeft: '0.5rem' }}><X size={16} /></button>
+          </div>
+        )}
 
         <main>
           {gameState === 'landing' && (
